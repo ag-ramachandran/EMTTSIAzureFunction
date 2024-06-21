@@ -1,32 +1,43 @@
-// Copyright (c) Microsoft Corporation. All rights reserved.
-// Licensed under the MIT License. See License.txt in the project root for license information.
-
-using System.Text.Json.Nodes;
-using Microsoft.Azure.Functions.Worker;
-using FromBodyAttribute = Microsoft.Azure.Functions.Worker.Http.FromBodyAttribute;
-using Microsoft.Azure.Functions.Worker.Extensions.Kusto;
-using Microsoft.Azure.Functions.Worker.Http;
+using System;
+using System.IO;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-
+using Microsoft.Azure.WebJobs;
+using Microsoft.Azure.WebJobs.Extensions.Http;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
+using System.Collections.Generic;
+using System.Text.Json.Nodes;
+using Microsoft.Azure.WebJobs.Kusto;
+using System.Linq;
 
 namespace Microsoft.Azure.WebJobs.Extensions.Fabric.TSI
 {
     public class GetAggregates
     {
-        [Function("GetPIPointValuesTSI")]
-        public IActionResult Run([HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "GetPIPointValuesTSI")] HttpRequestData req,[FromBody] TSIQueryRequest tsiQueryRequest,
-            [KustoInput(Database: "PI-TimeSeriesData-For-EMT",
-            KqlCommand = "declare query_parameters (tags:string,startDate:datetime,endDate:datetime,timebucket:timespan);GetAggregates(tags,startDate,endDate,timebucket)",
-            KqlParameters = "@tags={tags},@startDate={startDateTime},@endDate={endDateTime},@timebucket={binInterval}",Connection = "KustoConnectionString")] List<AggregateValues> aggregateValuesWrapper)
+        [FunctionName("GetPIPointValuesTSI")]
+        public static async Task<IActionResult> RunAsync(
+            [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "GetPIPointValuesTSI")]
+                HttpRequest req,ILogger logger, IBinder binder)
         {
-            var tags = tsiQueryRequest.tags;
-            var startDateTime = tsiQueryRequest.startDateTime;
-            var endDateTime = tsiQueryRequest.endDateTime;
+            var content = new StreamReader(req.Body).ReadToEnd();
+            TSIQueryRequest tsiQueryRequest = JsonConvert.DeserializeObject<TSIQueryRequest>(content);
+            string tags = JsonConvert.SerializeObject(tsiQueryRequest.tags);
+            var startDateTime = tsiQueryRequest.startDateTime.ToString("o", System.Globalization.CultureInfo.InvariantCulture);
+            var endDateTime = tsiQueryRequest.endDateTime.ToString("o", System.Globalization.CultureInfo.InvariantCulture);
             var binInterval = tsiQueryRequest.binInterval;
-            return new OkObjectResult(new AggregateValuesWrapper(data:aggregateValuesWrapper));
+            var kustoAttribute = new KustoAttribute("PI-TimeSeriesData-For-EMT")
+            {
+                KqlCommand = "declare query_parameters (tags:string,startDate:datetime,endDate:datetime,timebucket:timespan);GetAggregates(tags,startDate,endDate,timebucket)",
+                KqlParameters = $"@tags={tags},@startDate={startDateTime},@endDate={endDateTime},@timebucket={binInterval}",
+                Connection = "KustoConnectionString"
+            };
+            var exportedRecords = (await binder.BindAsync<IEnumerable<AggregateValues>>(kustoAttribute)).ToList();
+            return new OkObjectResult(new AggregateValuesWrapper(data: exportedRecords));
         }
     }
-    public record TSIQueryRequest(string tags, DateTime startDateTime, DateTime endDateTime, string binInterval);
+    public record TSIQueryRequest(List<string> tags, DateTime startDateTime, DateTime endDateTime, string binInterval);
     public record GetPIPointValuesTSI(JsonArray data);
 
     public record AggregateValue(string timestamp, double value);
@@ -39,4 +50,8 @@ namespace Microsoft.Azure.WebJobs.Extensions.Fabric.TSI
 }
 
 /*
-*/
+ ,
+            [Kusto(Database:"PI-TimeSeriesData-For-EMT" ,
+                KqlCommand = "declare query_parameters (tags:string,startDate:datetime,endDate:datetime,timebucket:timespan);GetAggregates(tags,startDate,endDate,timebucket)",
+                KqlParameters = "@tags={tags},@startDate={startDateTime},@endDate={endDateTime},@timebucket={binInterval}",Connection = "KustoConnectionString")] List<AggregateValues> aggregateValuesWrapper
+ */
