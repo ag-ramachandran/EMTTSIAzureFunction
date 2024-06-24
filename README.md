@@ -1,5 +1,5 @@
 
-# EMTTSIAzureFunction
+# Developer documentation for running the setup
 
 ### Create a table
 ```
@@ -18,7 +18,7 @@ MyTimeline | extend id="NAK-DHTT-30550_PV",timestamp=MyMonthHour,series=bag_pack
 
 ```
 
-### Create the function
+### Create the functions
 ```
 .create-or-alter function with (docstring = "Get timeseries aggregates") GetTagAggregates(tags:string,startDate:datetime,endDate:datetime,timebucket:timespan) {
 let tagsArray=split(tags,"|");
@@ -30,9 +30,19 @@ GoM
 | summarize values = make_list(d) by id
 | project-rename tagName=id
 }
+
+
+.create-or-alter function with (docstring = "Get timeseries aggregates") GetAggregatesUni(tags:string,startDate:datetime,endDate:datetime) {
+let tagsArray=split(tags,"|");
+GoM
+| where id in (tagsArray) and timestamp between (startDate..endDate)
+| extend Value=todouble(series.numericValue)
+| summarize value = avg(Value) by id
+| project-rename tagName=id
+}
 ```
 
-For InProcess Function runs
+### For InProcess Function runs
 
 ```
 {
@@ -54,3 +64,16 @@ For InProcess Function runs
 ```
  az account get-access-token --resource=https://<>.z4.kusto.fabric.microsoft.com --query accessToken --output tsv
  ```
+
+Once you get this token, you can set the following environment variable in your local environment. In a prod environment you can set this as an app setting. The format of the connection string is documented here : https://learn.microsoft.com/en-us/azure/data-explorer/kusto/api/connection-strings/kusto. Refer : Microsoft Entra ID Federated application authentication using ApplicationClientId and ApplicationKey set up which is the auth supported in Fabric today
+
+```
+export KustoConnectionString="Data Source=https://<>.fabric.microsoft.com;Fed=True;UserToken=<Token>"
+
+```
+
+For local runs you will need to have the function tools and then run the following command
+
+```
+func start --port 7104 --verbose
+```	

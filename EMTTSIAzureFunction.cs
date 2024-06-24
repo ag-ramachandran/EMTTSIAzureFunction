@@ -20,6 +20,7 @@ namespace Microsoft.Azure.WebJobs.Extensions.Fabric.TSI
     */
     public class GetAggregates
     {
+
         [FunctionName("GetPIPointValuesTSI")]
         public static async Task<IActionResult> RunAsync(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "GetPIPointValuesTSI")]
@@ -36,22 +37,49 @@ namespace Microsoft.Azure.WebJobs.Extensions.Fabric.TSI
             /*
                 Uses the Fabric KQL binding to query the Kusto database and get the aggregated values of the PI Points.
             */
-            var kustoAttribute = new KustoAttribute("PI-TimeSeriesData-For-EMT") // Database name
+            var kustoAttribute = GetKustoAttribute(tags, startDateTime, endDateTime, binInterval);
+            
+            if(binInterval != null)
             {
-                KqlCommand = "declare query_parameters (tags:string,startDate:datetime,endDate:datetime,timebucket:timespan);GetTagAggregates(tags,startDate,endDate,timebucket)",
-                KqlParameters = $"@tags={tags},@startDate={startDateTime},@endDate={endDateTime},@timebucket={binInterval}",
-                Connection = "KustoConnectionString"
-            };
-            var exportedRecords = (await binder.BindAsync<IEnumerable<AggregateValues>>(kustoAttribute)).ToList();
-            return new OkObjectResult(new AggregateValuesWrapper(data: exportedRecords));
+                var exportedRecords = (await binder.BindAsync<IEnumerable<AggregateValues>>(kustoAttribute)).ToList();
+                return new OkObjectResult(new AggregateValuesWrapper(data: exportedRecords));
+            } else 
+            {
+                var exportedRecords = (await binder.BindAsync<IEnumerable<AggregateValueUni>>(kustoAttribute)).ToList();
+                return new OkObjectResult(exportedRecords);
+            }
+            
         }
+
+
+        private static KustoAttribute GetKustoAttribute(string tags, string startDateTime, string endDateTime, string binInterval)
+        {
+            if(binInterval != null)
+            {
+                return new KustoAttribute("PI-TimeSeriesData-For-EMT")
+                {
+                    KqlCommand = "declare query_parameters (tags:string,startDate:datetime,endDate:datetime,timebucket:timespan);GetTagAggregates(tags,startDate,endDate,timebucket)",
+                    KqlParameters = $"@tags={tags},@startDate={startDateTime},@endDate={endDateTime},@timebucket={binInterval}",
+                    Connection = "KustoConnectionString"
+                };
+            } else 
+            {
+                return new KustoAttribute("PI-TimeSeriesData-For-EMT")
+                {
+                    KqlCommand = "declare query_parameters (tags:string,startDate:datetime,endDate:datetime);GetAggregatesUni(tags,startDate,endDate)",
+                    KqlParameters = $"@tags={tags},@startDate={startDateTime},@endDate={endDateTime}",
+                    Connection = "KustoConnectionString"
+                };
+
+            }
+        }
+
     }
-    public record TSIQueryRequest(List<string> tags, DateTime startDateTime, DateTime endDateTime, string binInterval);
-    public record GetPIPointValuesTSI(JsonArray data);
+    public record TSIQueryRequest(List<string> tags, DateTime startDateTime, DateTime endDateTime, string? binInterval);
     public record AggregateValue(string timestamp, double value);
     public record AggregateValues(string tagName, List<AggregateValue> values);
     public record AggregateValuesWrapper(List<AggregateValues> data);
-
+    public record AggregateValueUni(string tagName, double value);
 
 }
 
