@@ -20,9 +20,10 @@ MyTimeline | extend id="NAK-DHTT-30550_PV",timestamp=MyMonthHour,series=bag_pack
 
 ### Create the function
 ```
-.create-or-alter function with (docstring = "Get timeseries aggregates") GetAggregates(tags:string,startDate:datetime,endDate:datetime,timebucket:timespan) {
+.create-or-alter function with (docstring = "Get timeseries aggregates") GetTagAggregates(tags:string,startDate:datetime,endDate:datetime,timebucket:timespan) {
+let tagsArray=split(tags,"|");
 GoM
-| where id in (parse_json(tags)) and timestamp between (startDate..endDate)
+| where id in (tagsArray) and timestamp between (startDate..endDate)
 | extend Value=todouble(series.numericValue)
 | summarize Average = avg(Value), Count = count(), Min = min(Value), Max = max(Value) by id, bin(timestamp, timebucket)
 | extend d = bag_pack("timestamp", timestamp, "value", Average)

@@ -23,13 +23,14 @@ namespace Microsoft.Azure.WebJobs.Extensions.Fabric.TSI
         {
             var content = new StreamReader(req.Body).ReadToEnd();
             TSIQueryRequest tsiQueryRequest = JsonConvert.DeserializeObject<TSIQueryRequest>(content);
-            string tags = JsonConvert.SerializeObject(tsiQueryRequest.tags);
+            //string tags = JsonConvert.SerializeObject(tsiQueryRequest.tags);
+            string tags = String.Join("|", tsiQueryRequest.tags);
             var startDateTime = tsiQueryRequest.startDateTime.ToString("o", System.Globalization.CultureInfo.InvariantCulture);
             var endDateTime = tsiQueryRequest.endDateTime.ToString("o", System.Globalization.CultureInfo.InvariantCulture);
             var binInterval = tsiQueryRequest.binInterval;
             var kustoAttribute = new KustoAttribute("PI-TimeSeriesData-For-EMT")
             {
-                KqlCommand = "declare query_parameters (tags:string,startDate:datetime,endDate:datetime,timebucket:timespan);GetAggregates(tags,startDate,endDate,timebucket)",
+                KqlCommand = "declare query_parameters (tags:string,startDate:datetime,endDate:datetime,timebucket:timespan);GetTagAggregates(tags,startDate,endDate,timebucket)",
                 KqlParameters = $"@tags={tags},@startDate={startDateTime},@endDate={endDateTime},@timebucket={binInterval}",
                 Connection = "KustoConnectionString"
             };
